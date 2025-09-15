@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS lessonarchiver.users (id uuid PRIMARY KEY, notary_id VARCHAR(50) NOT NULL)

@@ -1,0 +1,1 @@
+ALTER TABLE lessonarchiver.files ALTER COLUMN file_id TYPE TEXT;

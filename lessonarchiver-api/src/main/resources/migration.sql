@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS lessonarchiver.files (id uuid PRIMARY KEY, file_id VARCHAR(50) NOT NULL, file_name TEXT NOT NULL, content_length BIGINT NOT NULL, sha1 VARCHAR(40) NULL, owner_id uuid NOT NULL, uploaded_at TIMESTAMP NOT NULL, CONSTRAINT fk_files_owner_id__id FOREIGN KEY (owner_id) REFERENCES lessonarchiver.users(id) ON DELETE RESTRICT ON UPDATE RESTRICT)

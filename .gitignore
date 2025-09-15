@@ -1,0 +1,13 @@
+node_modules
+package-lock.json
+
+.DS_Store
+.cache
+.env
+.vercel
+.output
+.vinxi
+
+/build/
+/public/build
+.vinxi
