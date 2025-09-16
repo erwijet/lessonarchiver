@@ -23,6 +23,8 @@ fun Application.configureKoin() {
             single<String>(named("db.username")) { environment.config.property("db.username").getString() }
             single<String>(named("db.password")) { environment.config.property("db.password").getString() }
             single<String>(named("b2.bucketId")) { environment.config.property("b2.bucketId").getString() }
+            single<String>(named("b2.applicationKeyId")) { environment.config.property("b2.applicationKeyId").getString() }
+            single<String>(named("b2.applicationKey")) { environment.config.property("b2.applicationKey").getString() }
 
             single {
                 Notary(
@@ -53,7 +55,7 @@ fun Application.configureKoin() {
                 )
             }
 
-            single<B2StorageClient> { B2StorageClientFactory.createDefaultFactory().create("KEYID", "KEY", "lessonarchiver-api") }
+            single<B2StorageClient> { B2StorageClientFactory.createDefaultFactory().create(get<String>(named("b2.applicationKeyId")), get<String>(named("b2.applicationKey")), "lessonarchiver-api") }
         })
     }
 }

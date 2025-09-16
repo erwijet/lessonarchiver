@@ -17,6 +17,8 @@ db:
   password: $POSTGRES_PASSWORD
 
 b2:
+  applicationKeyId: $B2_APPLICATION_KEY_ID
+  applicationKey: $B2_APPLICATION_KEY
   bucketId: $B2_BUCKET_ID:c1e49a04379946be9f99021f
 
 mode: dev
