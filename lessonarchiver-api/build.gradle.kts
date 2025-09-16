@@ -1,3 +1,5 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
@@ -56,4 +58,8 @@ dependencies {
     api(libs.koin.annotations)
     implementation("io.ktor:ktor-serialization-jackson:3.2.3")
     ksp(libs.koin.ksp.compiler)
+}
+
+tasks.named<ShadowJar>("shadowJar") {
+    mergeServiceFiles()
 }
