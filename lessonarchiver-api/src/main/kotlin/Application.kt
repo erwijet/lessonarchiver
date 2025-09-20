@@ -18,13 +18,14 @@ fun Application.module() {
     }
 
     install(CORS) {
+        allowMethod(HttpMethod.Get)
         allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Put)
         allowMethod(HttpMethod.Delete)
         allowMethod(HttpMethod.Patch)
         allowHeader(HttpHeaders.Authorization)
-        allowHost("localhost")
-        allowHost("lessonarchiver.com")
+        allowHost("localhost:3000", schemes = listOf("http"))
+        allowHost("lessonarchiver.com", schemes = listOf("https"), subDomains = listOf("app"))
     }
 
     configureKoin()
