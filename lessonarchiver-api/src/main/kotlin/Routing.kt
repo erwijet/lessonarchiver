@@ -30,6 +30,7 @@ import io.ktor.server.routing.*
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.apache.http.HttpStatus
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.koin.core.qualifier.named
@@ -61,6 +62,18 @@ fun Application.configureRouting() {
             }
 
             call.respond(mapOf("url" to notary.authenticate(via = Notary.Provider.GOOGLE, callback)))
+        }
+
+        get("/auth/renew") {
+            val token = call.request.headers["Authorization"]?.removePrefix("Bearer ") ?: return@get call.respond(
+                HttpStatusCode.Unauthorized)
+
+            notary.renew(token).let {
+                when(it) {
+                    is Notary.Renewal.Success -> call.respond(mapOf("token" to it.token))
+                    is Notary.Renewal.Failure -> call.respond(HttpStatusCode.BadRequest, it.reason)
+                }
+            }
         }
 
         authenticate {
