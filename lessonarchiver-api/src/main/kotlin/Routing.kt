@@ -61,7 +61,7 @@ fun Application.configureRouting() {
                 else -> "https://app.lessonarchiver.com/token"
             }
 
-            call.respond(mapOf("url" to notary.authenticate(via = Notary.Provider.GOOGLE, callback)))
+            call.respond(notary.authenticate(via = Notary.Provider.GOOGLE, callback))
         }
 
         get("/auth/renew") {
