@@ -56,13 +56,11 @@ fun Application.configureRouting() {
 
         get("/auth/google") {
             val callback = when(call.parameters["env"]) {
-                "local" -> "http://localhost:8080"
-                else -> "https://app.lessonarchiver.com"
+                "local" -> "http://localhost:8080/token"
+                else -> "https://app.lessonarchiver.com/token"
             }
 
-            notary.authenticate(via = Notary.Provider.GOOGLE, callback = "$callback/token").url.let {
-                call.respond(mapOf("url" to it))
-            }
+            call.respond(mapOf("url" to notary.authenticate(via = Notary.Provider.GOOGLE, callback)))
         }
 
         authenticate {

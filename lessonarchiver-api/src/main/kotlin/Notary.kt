@@ -7,7 +7,6 @@ import kotlinx.serialization.*
 import io.ktor.client.request.request
 import io.ktor.http.Url
 import io.ktor.http.appendPathSegments
-import io.ktor.http.parameters
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
@@ -88,10 +87,10 @@ class Notary(
         http.request(Url(url)) {
             url {
                 appendPathSegments("authorize", client)
-                parameters {
-                    set("via", via.value)
-                    set("key", key)
-                    set("callback", callback ?: this@Notary.callback)
+                with(parameters) {
+                    append("via", via.value)
+                    append("key", key)
+                    append("callback", callback ?: this@Notary.callback)
                 }
             }
         }.body()
