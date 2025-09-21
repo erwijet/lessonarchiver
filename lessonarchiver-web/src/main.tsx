@@ -4,28 +4,23 @@ import { createRoot } from "react-dom/client";
 import { routeTree } from "src/routeTree.gen";
 
 import "src/index.css";
-import { AuthProvider } from "react-oidc-context";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "components/ui/sonner";
+import { api } from "src/shared/api";
 
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {
-    interface Registrar {
+    interface Register {
         router: typeof router;
     }
 }
 
-const oidc = {
-    authority: "https://sso.lessonbinder.com/realms/lessonbinder",
-    client_id: "lb-web",
-    redirect_uri: window.location.origin + "/login/callback",
-    post_logout_redirect_uri: window.location.origin + "/login",
-    scope: "openid profile email",
-};
-
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <AuthProvider {...oidc}>
+        <QueryClientProvider client={api.client}>
+            <Toaster />
             <RouterProvider router={router} />
-        </AuthProvider>
+        </QueryClientProvider>
     </StrictMode>,
 );

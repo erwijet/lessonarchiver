@@ -1,51 +1,29 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { useAuth } from "react-oidc-context";
+import { createFileRoute } from "@tanstack/react-router";
+import { api } from "shared/api";
 import { Button } from "src/components/ui/button";
-import { Spinner } from "src/components/ui/shadcn-io/spinner";
+import { local } from "src/shared/local";
+import z from "zod";
 
 const Login = () => {
-    const auth = useAuth();
-    const navigate = useNavigate();
+    const search = Route.useSearch();
 
-    useEffect(() => {
-        if (auth.isAuthenticated) {
-            navigate({ to: "/" });
+    async function handleSignIn() {
+        if (search.dest) {
+            local.loginDest.set(search.dest);
+        } else {
+            local.loginDest.clear();
         }
-    }, [auth.isAuthenticated]);
 
-    if (auth.isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <Spinner />
-            </div>
-        );
+        const { url } = await api.getOAuthUrl("google");
+        window.location.href = url;
     }
-
-    if (auth.isAuthenticated) {
-        return <Outlet />;
-    }
-
-    const handleSignIn = () => {
-        auth.signinRedirect();
-    };
 
     return (
         <div className="flex items-center justify-center min-h-screen">
             <div className="text-center space-y-4">
-                <h1 className="text-2xl font-bold">Welcome to LessonBinder</h1>
+                <h1 className="text-2xl font-bold">Welcome to Lesson Archiver</h1>
                 <p className="text-gray-600">Please sign in to continue</p>
-                <Button onClick={handleSignIn} disabled={auth.isLoading}>
-                    {auth.isLoading ? "Signing in..." : "Sign In"}
-                </Button>
-                <Button variant="ghost" onClick={function() {
-                    auth.signoutRedirect();
-                }}>Logout</Button>
-                {auth.error && (
-                    <div className="text-red-600 mt-2">
-                        <p>Sign in failed: {auth.error.message}</p>
-                    </div>
-                )}
+                <Button onClick={handleSignIn}>Sign In</Button>
             </div>
         </div>
     );
@@ -53,4 +31,5 @@ const Login = () => {
 
 export const Route = createFileRoute("/login")({
     component: Login,
+    validateSearch: z.object({ dest: z.string().optional() }),
 });
