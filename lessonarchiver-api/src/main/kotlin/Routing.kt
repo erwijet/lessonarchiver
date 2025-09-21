@@ -36,7 +36,7 @@ fun Application.configureRouting() {
 
         get("/auth/google") {
             val callback = when(call.parameters["env"]) {
-                "local" -> "http://localhost:8080/token"
+                "local" -> "http://localhost:3000/token"
                 else -> "https://app.lessonarchiver.com/token"
             }
 
