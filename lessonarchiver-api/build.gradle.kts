@@ -1,5 +1,7 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
+val ktlint by configurations.creating
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
@@ -53,13 +55,33 @@ dependencies {
     implementation(libs.postgres)
     implementation(libs.b2.sdk.core)
     implementation(libs.b2.sdk.httpclient)
+    implementation(libs.classgraph)
     implementation(kotlin("stdlib-jdk8"))
 
     api(libs.koin.annotations)
     implementation("io.ktor:ktor-serialization-jackson:3.2.3")
     ksp(libs.koin.ksp.compiler)
+
+    ktlint(libs.ktlint) {
+        attributes {
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+        }
+    }
 }
 
 tasks.named<ShadowJar>("shadowJar") {
     mergeServiceFiles()
+}
+tasks.register<JavaExec>("ktlintFormat") {
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    description = "Check Kotlin code style and format"
+    classpath = ktlint
+    mainClass.set("com.pinterest.ktlint.Main")
+    jvmArgs("--add-opens=java.base/java.lang=ALL-UNNAMED")
+    args(
+        "-F",
+        "**/src/**/*.kt",
+        "**.kts",
+        "!**/build/**",
+    )
 }

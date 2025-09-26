@@ -4,6 +4,16 @@ import com.backblaze.b2.client.B2StorageClient
 import com.backblaze.b2.client.contentSources.B2FileContentSource
 import com.backblaze.b2.client.structures.B2UploadFileRequest
 import com.lessonarchiver.db.FileDAO
+import com.lessonarchiver.db.FilePinTable
+import com.lessonarchiver.db.FileTable
+import com.lessonarchiver.db.NoteDAO
+import com.lessonarchiver.db.NotePinTable
+import com.lessonarchiver.db.NoteTable
+import com.lessonarchiver.db.TagDAO
+import com.lessonarchiver.db.TagTable
+import com.lessonarchiver.db.findById
+import com.lessonarchiver.db.mapOrNull
+import com.lessonarchiver.db.toUUID
 import com.lessonarchiver.response.toResponse
 import io.ktor.http.*
 import io.ktor.http.content.PartData
@@ -16,7 +26,15 @@ import io.ktor.server.routing.*
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.SizedCollection
+import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.fullJoin
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.unionAll
 import org.koin.core.qualifier.named
 import org.koin.ktor.ext.inject
 import org.slf4j.LoggerFactory
@@ -92,7 +110,7 @@ fun Application.configureRouting() {
                                     logger.info("Uploaded file $remoteName to B2: $uploaded")
                                     results += transaction {
                                         FileDAO.new {
-                                            this.ownerId = call.user().dao
+                                            this.owner = call.user().dao
                                             this.fileId = uploaded.fileId
                                             this.fileName = uploaded.fileName
                                             this.contentLength = uploaded.contentLength
@@ -121,20 +139,73 @@ fun Application.configureRouting() {
                 call.respond(HttpStatusCode.OK, results.map { it.toResponse() }.toList())
             }
 
-            get("/files") {
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.takeIf { it in 0 .. 20 } ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid limit")
-                val offset = call.request.queryParameters["offset"]?.toLongOrNull()?.takeIf { it >= 0 } ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid offset")
+            @Serializable
+            data class CreateNoteParams(val title: String, val body: String, val tags: List<String>)
 
-                val files = transaction {
-                    call.user().dao.files.limit(limit).offset(offset).map { it.toResponse() }
+            post("/note") {
+                val params = call.receive<CreateNoteParams>()
+                val tags = params.tags.mapOrNull(TagDAO::findById) ?: return@post call.respond(HttpStatusCode.BadRequest)
+
+                val dao = transaction {
+                    NoteDAO.new {
+                        this.title = params.title
+                        this.body = params.body
+                        this.tags = SizedCollection(tags)
+                    }
                 }
 
-                call.respond(files)
+                return@post call.respond(dao.toResponse())
+            }
+
+            @Serializable
+            data class CreateTagParams(val name: String, val parent: String? = null)
+
+            post("/tag") {
+                val params = call.receive<CreateTagParams>()
+                val parent = params.parent?.let { transaction { TagDAO.findById(it) } ?: return@post call.respond(HttpStatusCode.BadRequest) }
+
+                val dao = runCatching { transaction {
+                    TagDAO.new {
+                        this.name = params.name
+                        this.parent = parent
+                        this.owner = call.user().dao
+                    }
+                } }.getOrNull() ?: return@post call.respond(HttpStatusCode.Conflict)
+
+                call.respond(dao.toResponse())
+            }
+
+            delete("/tag/{tagId}") {
+                val tag = transaction { TagDAO.find { TagTable.id eq call.parameters["tagId"]?.toUUID() and (TagTable.owner eq call.user().dao.id) } }.singleOrNull() ?: return@delete call.respond(HttpStatusCode.NotFound)
+                call.respond(transaction { tag.toResponse().also { tag.delete() } })
+            }
+
+            get("/documents") {
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.takeIf { it in 0 .. 20 } ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid limit")
+                val offset = call.request.queryParameters["offset"]?.toLongOrNull()?.takeIf { it >= 0 } ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid offset")
+                val pinned = call.request.queryParameters["pinned"]?.toBooleanStrictOrNull()
+
+                val documents = transaction {
+                    FileTable.fullJoin(FilePinTable).select(FileTable.id, FileTable.uploadedAt, FileTable.ownerId, FilePinTable.id).where(FileTable.ownerId eq call.user().dao.id and whereNotNull(pinned) { if (it) FilePinTable.id neq null else FilePinTable.id eq null })
+                        .unionAll(NoteTable.fullJoin(NotePinTable).select(NoteTable.id, NoteTable.updatedAt, NoteTable.ownerId).where(FileTable.ownerId eq call.user().dao.id and whereNotNull(pinned) { if (it) NotePinTable.id neq null else NotePinTable.id eq null }))
+                        .orderBy(FileTable.uploadedAt to SortOrder.DESC)
+                        .offset(offset)
+                        .limit(limit)
+                        .mapNotNull {
+                            runCatching { FileDAO.findById(it[FileTable.id].value)?.toResponse() }.getOrNull() ?: NoteDAO.findById(it[FileTable.id].value)?.toResponse()
+                        }
+                }
+
+                call.respond(documents)
+            }
+
+            get("/tags") {
+                call.respond(transaction { TagDAO.find { TagTable.owner eq call.user().dao.id }.map { it.toResponse() } })
             }
 
             get("/file/{fileId}") {
                 val fileId = call.parameters["fileId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid fileId")
-                val b2documentId = transaction { FileDAO.findById(UUID.fromString(fileId))?.takeIf { it.ownerId.id == call.user().dao.id }?.fileId } ?: return@get call.respond(HttpStatusCode.NotFound, "File not found")
+                val b2documentId = transaction { FileDAO.findById(UUID.fromString(fileId))?.takeIf { it.owner.id == call.user().dao.id }?.fileId } ?: return@get call.respond(HttpStatusCode.NotFound, "File not found")
 
                 val info = b2.getFileInfo(b2documentId)
 

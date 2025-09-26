@@ -1,4 +1,5 @@
 [versions]
+ktlint = "1.7.1"
 exposed = "0.61.0"
 h2 = "2.3.232"
 koin = "3.5.6"
@@ -6,6 +7,7 @@ koin-annotations = "2.1.0"
 kotlin = "2.1.10"
 ktor = "3.2.3"
 logback = "1.4.14"
+classgraph = "4.8.181"
 flyway = "11.11.2"
 hikaricp = "7.0.2"
 postgres = "42.7.7"
@@ -13,6 +15,7 @@ ksp = "2.1.10-1.0.30"
 b2 = "6.4.0"
 
 [libraries]
+ktlint = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint" }
 hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikaricp" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-cors = { module = "io.ktor:ktor-server-cors", version.ref = "ktor" }
@@ -43,7 +46,7 @@ flyway-postgres = { module = "org.flywaydb:flyway-database-postgresql", version.
 postgres = { module = "org.postgresql:postgresql", version.ref = "postgres" }
 b2-sdk-core = { module = "com.backblaze.b2:b2-sdk-core", version.ref = "b2" }
 b2-sdk-httpclient = { module = "com.backblaze.b2:b2-sdk-httpclient", version.ref = "b2"}
-
+classgraph = { module = "io.github.classgraph:classgraph", version.ref = "classgraph" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

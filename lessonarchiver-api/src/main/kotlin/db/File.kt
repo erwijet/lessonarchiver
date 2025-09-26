@@ -24,6 +24,9 @@ class FileDAO(id: EntityID<UUID>) : UUIDEntity(id) {
     var fileName by FileTable.fileName
     var contentLength by FileTable.contentLength
     var sha1 by FileTable.sha1
-    var ownerId by UserDAO referencedOn FileTable.ownerId
+    var owner by UserDAO referencedOn FileTable.ownerId
     val uploadedAt by FileTable.uploadedAt
+
+    var tags by TagDAO via TagToFileTable
+    val pin by FilePinDAO optionalBackReferencedOn FilePinTable.fileId
 }
