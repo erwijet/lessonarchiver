@@ -21,7 +21,7 @@ application {
 }
 
 ksp {
-    arg("KOIN_DEFAULT_MODULE","true")
+    arg("KOIN_DEFAULT_MODULE", "true")
 }
 
 kotlin {

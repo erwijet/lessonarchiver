@@ -18,7 +18,9 @@ object NoteTable : UUIDTable("lessonarchiver.notes") {
     val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
 }
 
-class NoteDAO(id: EntityID<UUID>) : UUIDEntity(id) {
+class NoteDAO(
+    id: EntityID<UUID>,
+) : UUIDEntity(id) {
     companion object : UUIDEntityClass<NoteDAO>(NoteTable)
 
     var title by NoteTable.title

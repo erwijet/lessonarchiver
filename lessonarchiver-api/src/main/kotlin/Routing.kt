@@ -53,20 +53,21 @@ fun Application.configureRouting() {
         }
 
         get("/auth/google") {
-            val callback = when(call.parameters["env"]) {
-                "local" -> "http://localhost:3000/token"
-                else -> "https://app.lessonarchiver.com/token"
-            }
+            val callback =
+                when (call.parameters["env"]) {
+                    "local" -> "http://localhost:3000/token"
+                    else -> "https://app.lessonarchiver.com/token"
+                }
 
             call.respond(notary.authenticate(via = Notary.Provider.GOOGLE, callback))
         }
 
         get("/auth/renew") {
-            val token = call.request.headers["Authorization"]?.removePrefix("Bearer ") ?: return@get call.respond(
-                HttpStatusCode.Unauthorized)
+            val token =
+                call.request.headers["Authorization"]?.removePrefix("Bearer ") ?: return@get call.respond(HttpStatusCode.Unauthorized)
 
             notary.renew(token).let {
-                when(it) {
+                when (it) {
                     is Notary.Renewal.Success -> call.respond(mapOf("token" to it.token))
                     is Notary.Renewal.Failure -> call.respond(HttpStatusCode.BadRequest, it.reason)
                 }
@@ -97,26 +98,36 @@ fun Application.configureRouting() {
 
                                     val contentType = (part.contentType ?: ContentType.Application.OctetStream).toString()
                                     val source = B2FileContentSource.builder(tmp).build()
-                                    val meta = mapOf("originalName" to originalName, "owner" to call.user().dao.id.value.toString())
+                                    val meta =
+                                        mapOf(
+                                            "originalName" to originalName,
+                                            "owner" to
+                                                call
+                                                    .user()
+                                                    .dao.id.value
+                                                    .toString(),
+                                        )
 
-                                    val uploaded = withContext(Dispatchers.IO) {
-                                        B2UploadFileRequest
-                                            .builder(bucketId, remoteName, contentType, source)
-                                            .setCustomFields(meta)
-                                            .build()
-                                            .let { b2.uploadSmallFile(it) }
-                                    }
+                                    val uploaded =
+                                        withContext(Dispatchers.IO) {
+                                            B2UploadFileRequest
+                                                .builder(bucketId, remoteName, contentType, source)
+                                                .setCustomFields(meta)
+                                                .build()
+                                                .let { b2.uploadSmallFile(it) }
+                                        }
 
                                     logger.info("Uploaded file $remoteName to B2: $uploaded")
-                                    results += transaction {
-                                        FileDAO.new {
-                                            this.owner = call.user().dao
-                                            this.fileId = uploaded.fileId
-                                            this.fileName = uploaded.fileName
-                                            this.contentLength = uploaded.contentLength
-                                            this.sha1 = uploaded.contentSha1
+                                    results +=
+                                        transaction {
+                                            FileDAO.new {
+                                                this.owner = call.user().dao
+                                                this.fileId = uploaded.fileId
+                                                this.fileName = uploaded.fileName
+                                                this.contentLength = uploaded.contentLength
+                                                this.sha1 = uploaded.contentSha1
+                                            }
                                         }
-                                    }
                                 } finally {
                                     runCatching { Files.deleteIfExists(tmp.toPath()) }
                                 }
@@ -140,61 +151,102 @@ fun Application.configureRouting() {
             }
 
             @Serializable
-            data class CreateNoteParams(val title: String, val body: String, val tags: List<String>)
+            data class CreateNoteParams(
+                val title: String,
+                val body: String,
+                val tags: List<String>,
+            )
 
             post("/note") {
                 val params = call.receive<CreateNoteParams>()
                 val tags = params.tags.mapOrNull(TagDAO::findById) ?: return@post call.respond(HttpStatusCode.BadRequest)
 
-                val dao = transaction {
-                    NoteDAO.new {
-                        this.title = params.title
-                        this.body = params.body
-                        this.tags = SizedCollection(tags)
+                val dao =
+                    transaction {
+                        NoteDAO.new {
+                            this.title = params.title
+                            this.body = params.body
+                            this.tags = SizedCollection(tags)
+                        }
                     }
-                }
 
                 return@post call.respond(dao.toResponse())
             }
 
             @Serializable
-            data class CreateTagParams(val name: String, val parent: String? = null)
+            data class CreateTagParams(
+                val name: String,
+                val parent: String? = null,
+            )
 
             post("/tag") {
                 val params = call.receive<CreateTagParams>()
-                val parent = params.parent?.let { transaction { TagDAO.findById(it) } ?: return@post call.respond(HttpStatusCode.BadRequest) }
-
-                val dao = runCatching { transaction {
-                    TagDAO.new {
-                        this.name = params.name
-                        this.parent = parent
-                        this.owner = call.user().dao
+                val parent =
+                    params.parent?.let {
+                        transaction {
+                            TagDAO.findById(
+                                it,
+                            )
+                        } ?: return@post call.respond(HttpStatusCode.BadRequest)
                     }
-                } }.getOrNull() ?: return@post call.respond(HttpStatusCode.Conflict)
+
+                val dao =
+                    runCatching {
+                        transaction {
+                            TagDAO.new {
+                                this.name = params.name
+                                this.parent = parent
+                                this.owner = call.user().dao
+                            }
+                        }
+                    }.getOrNull() ?: return@post call.respond(HttpStatusCode.Conflict)
 
                 call.respond(dao.toResponse())
             }
 
             delete("/tag/{tagId}") {
-                val tag = transaction { TagDAO.find { TagTable.id eq call.parameters["tagId"]?.toUUID() and (TagTable.owner eq call.user().dao.id) } }.singleOrNull() ?: return@delete call.respond(HttpStatusCode.NotFound)
+                val tag =
+                    transaction {
+                        TagDAO.find { TagTable.id eq call.parameters["tagId"]?.toUUID() and (TagTable.owner eq call.user().dao.id) }
+                    }.singleOrNull()
+                        ?: return@delete call.respond(HttpStatusCode.NotFound)
                 call.respond(transaction { tag.toResponse().also { tag.delete() } })
             }
 
             get("/documents") {
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.takeIf { it in 0 .. 20 } ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid limit")
-                val offset = call.request.queryParameters["offset"]?.toLongOrNull()?.takeIf { it >= 0 } ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid offset")
+                val limit =
+                    call.request.queryParameters["limit"]
+                        ?.toIntOrNull()
+                        ?.takeIf { it in 0..20 }
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid limit")
+                val offset =
+                    call.request.queryParameters["offset"]
+                        ?.toLongOrNull()
+                        ?.takeIf { it >= 0 }
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid offset")
                 val pinned = call.request.queryParameters["pinned"]?.toBooleanStrictOrNull()
 
-                val documents = transaction {
-                    FileTable.fullJoin(FilePinTable).select(FileTable.id, FileTable.uploadedAt, FileTable.ownerId, FilePinTable.id).where(FileTable.ownerId eq call.user().dao.id and whereNotNull(pinned) { if (it) FilePinTable.id neq null else FilePinTable.id eq null })
-                        .unionAll(NoteTable.fullJoin(NotePinTable).select(NoteTable.id, NoteTable.updatedAt, NoteTable.ownerId).where(FileTable.ownerId eq call.user().dao.id and whereNotNull(pinned) { if (it) NotePinTable.id neq null else NotePinTable.id eq null }))
-                        .orderBy(FileTable.uploadedAt to SortOrder.DESC)
-                        .offset(offset)
-                        .limit(limit)
-                        .mapNotNull {
-                            runCatching { FileDAO.findById(it[FileTable.id].value)?.toResponse() }.getOrNull() ?: NoteDAO.findById(it[FileTable.id].value)?.toResponse()
-                        }
-                }
+                val documents =
+                    transaction {
+                        FileTable
+                            .fullJoin(FilePinTable)
+                            .select(FileTable.id, FileTable.uploadedAt, FileTable.ownerId, FilePinTable.id)
+                            .where(
+                                FileTable.ownerId eq call.user().dao.id and
+                                    whereNotNull(pinned) { if (it) FilePinTable.id neq null else FilePinTable.id eq null },
+                            ).unionAll(
+                                NoteTable.fullJoin(NotePinTable).select(NoteTable.id, NoteTable.updatedAt, NoteTable.ownerId).where(
+                                    FileTable.ownerId eq call.user().dao.id and
+                                        whereNotNull(pinned) { if (it) NotePinTable.id neq null else NotePinTable.id eq null },
+                                ),
+                            ).orderBy(FileTable.uploadedAt to SortOrder.DESC)
+                            .offset(offset)
+                            .limit(limit)
+                            .mapNotNull {
+                                runCatching { FileDAO.findById(it[FileTable.id].value)?.toResponse() }.getOrNull()
+                                    ?: NoteDAO.findById(it[FileTable.id].value)?.toResponse()
+                            }
+                    }
 
                 call.respond(documents)
             }
@@ -205,7 +257,9 @@ fun Application.configureRouting() {
 
             get("/file/{fileId}") {
                 val fileId = call.parameters["fileId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid fileId")
-                val b2documentId = transaction { FileDAO.findById(UUID.fromString(fileId))?.takeIf { it.owner.id == call.user().dao.id }?.fileId } ?: return@get call.respond(HttpStatusCode.NotFound, "File not found")
+                val b2documentId =
+                    transaction { FileDAO.findById(UUID.fromString(fileId))?.takeIf { it.owner.id == call.user().dao.id }?.fileId }
+                        ?: return@get call.respond(HttpStatusCode.NotFound, "File not found")
 
                 val info = b2.getFileInfo(b2documentId)
 

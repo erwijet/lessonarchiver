@@ -9,7 +9,8 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 
 fun main(args: Array<String>) {
-    io.ktor.server.netty.EngineMain.main(args)
+    io.ktor.server.netty.EngineMain
+        .main(args)
 }
 
 fun Application.module() {

@@ -17,7 +17,9 @@ object FileTable : UUIDTable("lessonarchiver.files") {
     val uploadedAt = timestamp("uploaded_at").clientDefault { Clock.System.now() }
 }
 
-class FileDAO(id: EntityID<UUID>) : UUIDEntity(id) {
+class FileDAO(
+    id: EntityID<UUID>,
+) : UUIDEntity(id) {
     companion object : UUIDEntityClass<FileDAO>(FileTable)
 
     var fileId by FileTable.fileId

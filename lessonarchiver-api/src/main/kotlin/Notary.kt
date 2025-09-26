@@ -3,12 +3,12 @@ package com.lessonarchiver
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
-import kotlinx.serialization.*
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.request
 import io.ktor.http.Url
 import io.ktor.http.appendPathSegments
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonClassDiscriminator
 import kotlinx.serialization.json.JsonIgnoreUnknownKeys
@@ -17,25 +17,30 @@ class Notary(
     private val client: String,
     private val url: String,
     private val callback: String,
-    private val key: String
+    private val key: String,
 ) {
-    private val http = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                encodeDefaults = true
-                explicitNulls = false
-                allowStructuredMapKeys = true
-                prettyPrint = false
-                allowStructuredMapKeys = true
-            })
+    private val http =
+        HttpClient(CIO) {
+            install(ContentNegotiation) {
+                json(
+                    Json {
+                        ignoreUnknownKeys = true
+                        encodeDefaults = true
+                        explicitNulls = false
+                        allowStructuredMapKeys = true
+                        prettyPrint = false
+                        allowStructuredMapKeys = true
+                    },
+                )
+            }
+
+            expectSuccess = true
         }
 
-        expectSuccess = true
-    }
-
-    enum class Provider(val value: String) {
-        GOOGLE("google")
+    enum class Provider(
+        val value: String,
+    ) {
+        GOOGLE("google"),
     }
 
     @Serializable
@@ -48,27 +53,32 @@ class Notary(
         @SerialName("fullname") val fullName: String,
         val picture: String,
         val sub: String,
-        val aud: String
+        val aud: String,
     )
 
     @Serializable
     @OptIn(ExperimentalSerializationApi::class)
     @JsonClassDiscriminator("valid")
     sealed class Inspection {
-        abstract val valid: Boolean;
+        abstract val valid: Boolean
 
         @Serializable
         @SerialName("true")
-        data class Pass(override val valid: Boolean, val claims: UserInfo) : Inspection()
+        data class Pass(
+            override val valid: Boolean,
+            val claims: UserInfo,
+        ) : Inspection()
 
         @Serializable
         @SerialName("false")
-        data class Fail(override val valid: Boolean) : Inspection()
+        data class Fail(
+            override val valid: Boolean,
+        ) : Inspection()
     }
 
     @Serializable
     data class Authentication(
-        val url: String
+        val url: String,
     )
 
     @Serializable
@@ -77,33 +87,48 @@ class Notary(
     sealed class Renewal {
         @Serializable
         @SerialName("true")
-        data class Success(val token: String, val ok: Boolean) : Renewal()
+        data class Success(
+            val token: String,
+            val ok: Boolean,
+        ) : Renewal()
+
         @Serializable
         @SerialName("false")
-        data class Failure(val reason: String, val ok: Boolean) : Renewal()
+        data class Failure(
+            val reason: String,
+            val ok: Boolean,
+        ) : Renewal()
     }
 
-    suspend fun authenticate(via: Provider, callback: String? = null): Authentication =
-        http.request(Url(url)) {
-            url {
-                appendPathSegments("authorize", client)
-                with(parameters) {
-                    append("via", via.value)
-                    append("key", key)
-                    append("callback", callback ?: this@Notary.callback)
+    suspend fun authenticate(
+        via: Provider,
+        callback: String? = null,
+    ): Authentication =
+        http
+            .request(Url(url)) {
+                url {
+                    appendPathSegments("authorize", client)
+                    with(parameters) {
+                        append("via", via.value)
+                        append("key", key)
+                        append("callback", callback ?: this@Notary.callback)
+                    }
                 }
-            }
-        }.body()
+            }.body()
 
-    suspend fun inspect(token: String): Inspection = http.request(Url(url)) {
-        url {
-            appendPathSegments("inspect", token)
-        }
-    }.body()
+    suspend fun inspect(token: String): Inspection =
+        http
+            .request(Url(url)) {
+                url {
+                    appendPathSegments("inspect", token)
+                }
+            }.body()
 
-    suspend fun renew(token: String): Renewal = http.request(Url(url)) {
-        url {
-            appendPathSegments("renew", token)
-        }
-    }.body()
+    suspend fun renew(token: String): Renewal =
+        http
+            .request(Url(url)) {
+                url {
+                    appendPathSegments("renew", token)
+                }
+            }.body()
 }

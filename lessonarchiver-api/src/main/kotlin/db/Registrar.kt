@@ -13,15 +13,17 @@ fun <T, R> Iterable<T>.mapOrNull(f: T.() -> R?): List<R>? {
     return if (mapped.count() == this.count()) mapped else null
 }
 
-fun <T, R> Iterable<T>.mapAborting(f: T.(() -> Unit) -> R) = {
-    var aborted = false
-    val mapped = map {
-        if (aborted) return@map null
-        with(it) { f { aborted = true } }
-    }
+fun <T, R> Iterable<T>.mapAborting(f: T.(() -> Unit) -> R) =
+    {
+        var aborted = false
+        val mapped =
+            map {
+                if (aborted) return@map null
+                with(it) { f { aborted = true } }
+            }
 
-    if (aborted) null else mapped
-}
+        if (aborted) null else mapped
+    }
 
 fun <T : UUIDEntity> UUIDEntityClass<T>.findById(uuidLike: String) = uuidLike.toUUID()?.let { this.findById(it) }
 

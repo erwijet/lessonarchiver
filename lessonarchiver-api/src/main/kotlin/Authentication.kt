@@ -40,14 +40,15 @@ data class UserPrincipal(
     val picture: String,
 ) {
     companion object {
-        fun from(claims: UserInfo) = UserPrincipal(
-            userId = claims.userId,
-            givenName = claims.givenName,
-            familyName = claims.familyName,
-            fullName = claims.fullName,
-            picture = claims.picture,
-            dao = UserDAO.findOrCreateByNotaryId(claims.userId)
-        )
+        fun from(claims: UserInfo) =
+            UserPrincipal(
+                userId = claims.userId,
+                givenName = claims.givenName,
+                familyName = claims.familyName,
+                fullName = claims.fullName,
+                picture = claims.picture,
+                dao = UserDAO.findOrCreateByNotaryId(claims.userId),
+            )
     }
 }
 

@@ -16,17 +16,19 @@ fun Application.configureMigrations() {
     val koin = getKoin()
     koin.get<Database>()
 
-    val flyway = Flyway.configure()
-        .also { it.pluginRegister.getPlugin(PostgreSQLConfigurationExtension::class.java).isTransactionalLock = false }
-        .dataSource(
-        koin.get<String>(named("db.url")),
-        koin.get<String>(named("db.username")),
-        koin.get<String>(named("db.password")),
-    ).defaultSchema("lessonarchiver")
-        .locations("classpath:migrations")
-        .validateMigrationNaming(true)
-        .cleanDisabled(koin.get(named("mode")) !in listOf("local"))
-        .load()
+    val flyway =
+        Flyway
+            .configure()
+            .also { it.pluginRegister.getPlugin(PostgreSQLConfigurationExtension::class.java).isTransactionalLock = false }
+            .dataSource(
+                koin.get<String>(named("db.url")),
+                koin.get<String>(named("db.username")),
+                koin.get<String>(named("db.password")),
+            ).defaultSchema("lessonarchiver")
+            .locations("classpath:migrations")
+            .validateMigrationNaming(true)
+            .cleanDisabled(koin.get(named("mode")) !in listOf("local"))
+            .load()
 
     val result = flyway.migrate()
 
@@ -34,9 +36,10 @@ fun Application.configureMigrations() {
         throw Exception("Failed to migrate database: ${result.migrationsExecuted} migrations executed")
     }
 
-    val migrationStmts = transaction {
-        MigrationUtils.statementsRequiredForDatabaseMigration(*Registrar.tables.toTypedArray())
-    }
+    val migrationStmts =
+        transaction {
+            MigrationUtils.statementsRequiredForDatabaseMigration(*Registrar.tables.toTypedArray())
+        }
 
     if (migrationStmts.isNotEmpty()) {
         log.error("Database Migration needed!")

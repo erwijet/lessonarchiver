@@ -17,7 +17,9 @@ object TagTable : UUIDTable("lessonarchiver.tags") {
     }
 }
 
-class TagDAO(id: EntityID<UUID>) : UUIDEntity(id) {
+class TagDAO(
+    id: EntityID<UUID>,
+) : UUIDEntity(id) {
     companion object : UUIDEntityClass<TagDAO>(TagTable)
 
     var owner by UserDAO referencedOn TagTable.owner
