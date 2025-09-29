@@ -56,6 +56,10 @@ dependencies {
     implementation(libs.b2.sdk.core)
     implementation(libs.b2.sdk.httpclient)
     implementation(libs.classgraph)
+    implementation(libs.elasticsearch.java)
+    implementation(libs.elasticsearch.rest.client)
+    implementation(libs.jakarta.json.api)
+    implementation(libs.glassfish.jakarta.json)
     implementation(kotlin("stdlib-jdk8"))
 
     api(libs.koin.annotations)

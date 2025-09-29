@@ -1,15 +1,29 @@
 package com.lessonarchiver
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.json.jackson.JacksonJsonpMapper
+import co.elastic.clients.transport.ElasticsearchTransport
+import co.elastic.clients.transport.rest_client.RestClientTransport
 import com.backblaze.b2.client.B2StorageClient
 import com.backblaze.b2.client.B2StorageClientFactory
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.ktor.http.auth.AuthScheme
 import io.ktor.server.application.*
+import org.apache.http.HttpHost
+import org.apache.http.auth.AuthScope
+import org.apache.http.auth.UsernamePasswordCredentials
+import org.apache.http.impl.client.BasicCredentialsProvider
+import org.elasticsearch.client.RestClient
+import org.elasticsearch.client.RestClientBuilder
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.DatabaseConfig
 import org.jetbrains.exposed.sql.Schema
+import org.koin.core.annotation.ComponentScan
+import org.koin.core.annotation.Module
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
+import org.koin.ksp.generated.module
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 
@@ -26,6 +40,15 @@ fun Application.configureKoin() {
                 single<String>(named("b2.bucketId")) { environment.config.property("b2.bucketId").getString() }
                 single<String>(named("b2.applicationKeyId")) { environment.config.property("b2.applicationKeyId").getString() }
                 single<String>(named("b2.applicationKey")) { environment.config.property("b2.applicationKey").getString() }
+                single<String>(named("es.host")) { environment.config.property("es.host").getString() }
+                single<Int>(named("es.port")) {
+                    environment.config
+                        .property("es.port")
+                        .getString()
+                        .toInt()
+                }
+                single<String>(named("es.username")) { environment.config.property("es.username").getString() }
+                single<String>(named("es.password")) { environment.config.property("es.password").getString() }
 
                 single {
                     Notary(
@@ -66,7 +89,38 @@ fun Application.configureKoin() {
                         "lessonarchiver-api",
                     )
                 }
+
+                single<BasicCredentialsProvider> {
+                    BasicCredentialsProvider().also {
+                        it.setCredentials(
+                            AuthScope.ANY,
+                            UsernamePasswordCredentials(get<String>(named("es.username")), get<String>(named("es.password"))),
+                        )
+                    }
+                }
+
+                single<RestClient> {
+                    RestClient
+                        .builder(
+                            HttpHost(get<String>(named("es.host")), get<Int>(named("es.port")), "https"),
+                        ).setHttpClientConfigCallback {
+                            it.setDefaultCredentialsProvider(get<BasicCredentialsProvider>())
+                        }.build()
+                }
+
+                single<ElasticsearchTransport> {
+                    RestClientTransport(get<RestClient>(), JacksonJsonpMapper())
+                }
+
+                single<ElasticsearchClient> {
+                    ElasticsearchClient(get<ElasticsearchTransport>())
+                }
             },
+            AppModule().module,
         )
     }
 }
+
+@Module
+@ComponentScan("com.lessonarchiver")
+class AppModule

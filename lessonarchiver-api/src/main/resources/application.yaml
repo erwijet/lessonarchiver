@@ -21,4 +21,10 @@ b2:
   applicationKey: $B2_APPLICATION_KEY
   bucketId: $B2_BUCKET_ID:c1e49a04379946be9f99021f
 
+es:
+  host: $ELASTIC_HOST:es.lessonarchiver.com
+  port: 443
+  username: $ELASTIC_USERNAME:elastic
+  password: $ELASTIC_PASSWORD
+
 mode: dev

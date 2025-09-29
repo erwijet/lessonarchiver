@@ -4,6 +4,7 @@ import com.backblaze.b2.client.B2StorageClient
 import com.backblaze.b2.client.contentSources.B2FileContentSource
 import com.backblaze.b2.client.structures.B2UploadFileRequest
 import com.lessonarchiver.db.FileDAO
+import com.lessonarchiver.db.FileGrantDAO
 import com.lessonarchiver.db.FilePinTable
 import com.lessonarchiver.db.FileTable
 import com.lessonarchiver.db.NoteDAO
@@ -14,25 +15,35 @@ import com.lessonarchiver.db.TagTable
 import com.lessonarchiver.db.findById
 import com.lessonarchiver.db.mapOrNull
 import com.lessonarchiver.db.toUUID
+import com.lessonarchiver.response.MaterialsSearchResponse
+import com.lessonarchiver.response.toDAO
 import com.lessonarchiver.response.toResponse
+import com.lessonarchiver.svc.FileIndexService
+import com.lessonarchiver.svc.NoteIndexService
+import com.lessonarchiver.svc.Scored
+import com.lessonarchiver.svc.toIndexed
 import io.ktor.http.*
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import io.ktor.server.http.content.files
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.sql.SizedCollection
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.neq
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.fullJoin
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.unionAll
 import org.koin.core.qualifier.named
@@ -41,11 +52,17 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Files
 import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
+import kotlin.uuid.toJavaUuid
 
+@OptIn(ExperimentalUuidApi::class)
 fun Application.configureRouting() {
     val b2: B2StorageClient by inject()
     val notary: Notary by inject()
     val bucketId: String by inject(named("b2.bucketId"))
+    val fileIdx: FileIndexService by inject()
+    val noteIdx: NoteIndexService by inject()
 
     routing {
         get("/") {
@@ -143,6 +160,13 @@ fun Application.configureRouting() {
                     return@post call.respond(HttpStatusCode.InternalServerError, "Upload failed: ${e.message}")
                 }
 
+                results
+                    .map { each ->
+                        async(Dispatchers.IO) {
+                            fileIdx.upsert(each.toIndexed())
+                        }
+                    }.awaitAll()
+
                 if (results.isEmpty()) {
                     return@post call.respond(HttpStatusCode.BadRequest, "No files uploaded")
                 }
@@ -154,23 +178,69 @@ fun Application.configureRouting() {
             data class CreateNoteParams(
                 val title: String,
                 val body: String,
-                val tags: List<String>,
+                val tags: List<@Contextual Uuid>,
             )
 
             post("/note") {
                 val params = call.receive<CreateNoteParams>()
-                val tags = params.tags.mapOrNull(TagDAO::findById) ?: return@post call.respond(HttpStatusCode.BadRequest)
+                val tags =
+                    transaction { params.tags.mapOrNull { TagDAO.findById(it.toJavaUuid()) } }
+                        ?: return@post call.respond(HttpStatusCode.BadRequest)
 
                 val dao =
                     transaction {
                         NoteDAO.new {
                             this.title = params.title
                             this.body = params.body
+                            this.owner = call.user().dao
                             this.tags = SizedCollection(tags)
                         }
                     }
 
+                noteIdx.upsert(dao.toIndexed())
                 return@post call.respond(dao.toResponse())
+            }
+
+            @Serializable
+            data class UpdateNoteParams(
+                @Contextual val id: UUID,
+                val title: String,
+                val body: String,
+                val tags: List<@Contextual UUID>,
+            )
+
+            put("/note") {
+                val params = call.receive<UpdateNoteParams>()
+                val tags =
+                    params.tags.mapOrNull { transaction { TagDAO.findById(it) } } ?: return@put call.respond(HttpStatusCode.BadRequest)
+
+                val dao =
+                    transaction {
+                        NoteDAO.findById(params.id)?.takeIf { it.owner == call.user().dao }
+                    } ?: return@put call.respond(HttpStatusCode.NotFound)
+
+                transaction {
+                    dao.title = params.title
+                    dao.body = params.body
+                    dao.tags = SizedCollection(tags)
+                }
+
+                noteIdx.upsert(dao.toIndexed())
+                return@put call.respond(dao.toResponse())
+            }
+
+            delete("/note/{noteId}") {
+                val noteId = call.parameters["noteId"]?.toUUID() ?: return@delete call.respond(HttpStatusCode.BadRequest)
+                val dao =
+                    transaction { NoteDAO.findById(noteId)?.takeIf { it.owner == call.user().dao } }
+                        ?: return@delete call.respond(HttpStatusCode.NotFound)
+
+                transaction {
+                    noteIdx.delete(dao.id.value, dao.owner.id.value)
+                    dao.delete()
+                }
+
+                call.respond(HttpStatusCode.OK)
             }
 
             @Serializable
@@ -213,7 +283,40 @@ fun Application.configureRouting() {
                 call.respond(transaction { tag.toResponse().also { tag.delete() } })
             }
 
-            get("/documents") {
+            post("/grant/{fileId}") {
+                val fileId = call.parameters["fileId"] ?: return@post call.respond(HttpStatusCode.BadRequest, "Missing or invalid fileId")
+                val file =
+                    transaction {
+                        FileDAO.findById(fileId)?.takeIf { it.owner.id == call.user().dao.id }
+                        FileDAO.findById(UUID.fromString(fileId))?.takeIf { it.owner.id == call.user().dao.id }
+                    } ?: return@post call.respond(HttpStatusCode.NotFound, "File not found")
+
+                val grant =
+                    transaction {
+                        FileGrantDAO.new {
+                            this.file = file
+                            this.user = call.user().dao
+                        }
+                    }
+
+                call.respond(grant.toResponse())
+            }
+
+            get("/materials/search") {
+                val query =
+                    call.request.queryParameters["q"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid query")
+
+                val files = async(Dispatchers.IO) { fileIdx.search(call.user().dao.id.value, query).mapNotNull { it.doc.toDAO()?.toResponse() } }
+                val notes = async(Dispatchers.IO) { noteIdx.search(call.user().dao.id.value, query).mapNotNull { it.doc.toDAO()?.toResponse() } }
+
+                call.respond(MaterialsSearchResponse(
+                    q = query,
+                    files = files.await(),
+                    notes = notes.await(),
+                ))
+            }
+
+            get("/materials") {
                 val limit =
                     call.request.queryParameters["limit"]
                         ?.toIntOrNull()
@@ -233,11 +336,11 @@ fun Application.configureRouting() {
                             .select(FileTable.id, FileTable.uploadedAt, FileTable.ownerId, FilePinTable.id)
                             .where(
                                 FileTable.ownerId eq call.user().dao.id and
-                                    whereNotNull(pinned) { if (it) FilePinTable.id neq null else FilePinTable.id eq null },
+                                    { pinned whenNotNull { if (it) FilePinTable.id neq null else FilePinTable.id eq null } },
                             ).unionAll(
                                 NoteTable.fullJoin(NotePinTable).select(NoteTable.id, NoteTable.updatedAt, NoteTable.ownerId).where(
                                     FileTable.ownerId eq call.user().dao.id and
-                                        whereNotNull(pinned) { if (it) NotePinTable.id neq null else NotePinTable.id eq null },
+                                        { pinned whenNotNull { if (it) NotePinTable.id neq null else FilePinTable.id eq null } },
                                 ),
                             ).orderBy(FileTable.uploadedAt to SortOrder.DESC)
                             .offset(offset)
@@ -255,16 +358,18 @@ fun Application.configureRouting() {
                 call.respond(transaction { TagDAO.find { TagTable.owner eq call.user().dao.id }.map { it.toResponse() } })
             }
 
-            get("/file/{fileId}") {
-                val fileId = call.parameters["fileId"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid fileId")
-                val b2documentId =
-                    transaction { FileDAO.findById(UUID.fromString(fileId))?.takeIf { it.owner.id == call.user().dao.id }?.fileId }
-                        ?: return@get call.respond(HttpStatusCode.NotFound, "File not found")
+            get("/file/{fileGrantId}") {
+                val fileGrantId =
+                    call.parameters["fileGrantId"]?.toUUID()
+                        ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid grant")
+                val grant =
+                    transaction { FileGrantDAO.findById(fileGrantId)?.takeIf { it.user == call.user().dao } }
+                        ?: return@get call.respond(HttpStatusCode.NotFound, "Grant not found")
 
-                val info = b2.getFileInfo(b2documentId)
+                val b2file = b2.getFileInfo(grant.file.fileId)
 
-                call.respondOutputStream(ContentType.parse(info.contentType ?: "application/octet-stream"), HttpStatusCode.OK) {
-                    b2.downloadById(b2documentId) { _, stream ->
+                call.respondOutputStream(ContentType.parse(b2file.contentType ?: "application/octet-stream"), HttpStatusCode.OK) {
+                    b2.downloadById(grant.file.fileId) { _, stream ->
                         stream.copyTo(this@respondOutputStream)
                     }
                 }

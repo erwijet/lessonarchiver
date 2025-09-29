@@ -7,15 +7,31 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.contextual
+import java.util.UUID
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain
         .main(args)
 }
 
+@OptIn(ExperimentalUuidApi::class)
 fun Application.module() {
     install(ContentNegotiation) {
-        json()
+        json(
+            json =
+                Json {
+                    serializersModule =
+                        SerializersModule {
+                            contextual(Uuid.serializer())
+                        }
+                },
+        )
     }
 
     install(CORS) {
@@ -33,5 +49,6 @@ fun Application.module() {
     configureMonitoring()
     configureAuthentication()
     configureMigrations()
+    configureElastic()
     configureRouting()
 }

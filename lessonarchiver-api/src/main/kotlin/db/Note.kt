@@ -2,8 +2,6 @@ package com.lessonarchiver.db
 
 import com.lessonarchiver.onUpdate
 import kotlinx.datetime.Clock
-import org.jetbrains.exposed.dao.EntityChangeType
-import org.jetbrains.exposed.dao.EntityHook
 import org.jetbrains.exposed.dao.UUIDEntity
 import org.jetbrains.exposed.dao.UUIDEntityClass
 import org.jetbrains.exposed.dao.id.EntityID
