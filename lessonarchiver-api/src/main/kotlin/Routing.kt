@@ -181,7 +181,7 @@ fun Application.configureRouting() {
                 val tags: List<@Contextual Uuid>,
             )
 
-            post("/note") {
+            post("/materials/note") {
                 val params = call.receive<CreateNoteParams>()
                 val tags =
                     transaction { params.tags.mapOrNull { TagDAO.findById(it.toJavaUuid()) } }
@@ -209,7 +209,7 @@ fun Application.configureRouting() {
                 val tags: List<@Contextual UUID>,
             )
 
-            put("/note") {
+            put("/materials/note") {
                 val params = call.receive<UpdateNoteParams>()
                 val tags =
                     params.tags.mapOrNull { transaction { TagDAO.findById(it) } } ?: return@put call.respond(HttpStatusCode.BadRequest)
@@ -229,7 +229,7 @@ fun Application.configureRouting() {
                 return@put call.respond(dao.toResponse())
             }
 
-            delete("/note/{noteId}") {
+            delete("/materials/note/{noteId}") {
                 val noteId = call.parameters["noteId"]?.toUUID() ?: return@delete call.respond(HttpStatusCode.BadRequest)
                 val dao =
                     transaction { NoteDAO.findById(noteId)?.takeIf { it.owner == call.user().dao } }
@@ -306,8 +306,8 @@ fun Application.configureRouting() {
                 val query =
                     call.request.queryParameters["q"] ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid query")
 
-                val files = async(Dispatchers.IO) { fileIdx.search(call.user().dao.id.value, query).mapNotNull { it.doc.toDAO()?.toResponse() } }
-                val notes = async(Dispatchers.IO) { noteIdx.search(call.user().dao.id.value, query).mapNotNull { it.doc.toDAO()?.toResponse() } }
+                val files = async(Dispatchers.IO) { fileIdx.search(query, call.user().dao.id.value).mapNotNull { it.doc.toDAO()?.toResponse() } }
+                val notes = async(Dispatchers.IO) { noteIdx.search(query, call.user().dao.id.value).mapNotNull { it.doc.toDAO()?.toResponse() } }
 
                 call.respond(MaterialsSearchResponse(
                     q = query,
@@ -329,18 +329,18 @@ fun Application.configureRouting() {
                         ?: return@get call.respond(HttpStatusCode.BadRequest, "Missing or invalid offset")
                 val pinned = call.request.queryParameters["pinned"]?.toBooleanStrictOrNull()
 
-                val documents =
+                val materials =
                     transaction {
                         FileTable
                             .fullJoin(FilePinTable)
                             .select(FileTable.id, FileTable.uploadedAt, FileTable.ownerId, FilePinTable.id)
                             .where(
                                 FileTable.ownerId eq call.user().dao.id and
-                                    { pinned whenNotNull { if (it) FilePinTable.id neq null else FilePinTable.id eq null } },
+                                    { pinned.whenNotNull { if (it) FilePinTable.id neq null else FilePinTable.id eq null } },
                             ).unionAll(
                                 NoteTable.fullJoin(NotePinTable).select(NoteTable.id, NoteTable.updatedAt, NoteTable.ownerId).where(
                                     FileTable.ownerId eq call.user().dao.id and
-                                        { pinned whenNotNull { if (it) NotePinTable.id neq null else FilePinTable.id eq null } },
+                                        { pinned.whenNotNull { pinned -> if (pinned) NotePinTable.id neq null else FilePinTable.id eq null } },
                                 ),
                             ).orderBy(FileTable.uploadedAt to SortOrder.DESC)
                             .offset(offset)
@@ -351,7 +351,7 @@ fun Application.configureRouting() {
                             }
                     }
 
-                call.respond(documents)
+                call.respond(materials)
             }
 
             get("/tags") {
@@ -365,6 +365,8 @@ fun Application.configureRouting() {
                 val grant =
                     transaction { FileGrantDAO.findById(fileGrantId)?.takeIf { it.user == call.user().dao } }
                         ?: return@get call.respond(HttpStatusCode.NotFound, "Grant not found")
+
+                if (grant.isExpired) return@get call.respond(HttpStatusCode.BadRequest, "Grant is expired")
 
                 val b2file = b2.getFileInfo(grant.file.fileId)
 

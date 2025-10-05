@@ -1,9 +1,7 @@
 package com.lessonarchiver.response
 
-import co.elastic.clients.elasticsearch._types.SortOptionsBuilders.doc
 import com.lessonarchiver.db.FileDAO
 import com.lessonarchiver.db.NoteDAO
-import com.lessonarchiver.db.findById
 import com.lessonarchiver.svc.IndexedFileDoc
 import com.lessonarchiver.svc.IndexedNoteDoc
 import kotlinx.datetime.Instant
@@ -12,7 +10,7 @@ import kotlinx.serialization.builtins.LongAsStringSerializer
 import org.jetbrains.exposed.sql.transactions.transaction
 
 @Serializable
-abstract class DocumentResponse(
+abstract class MaterialResponse(
     val type: String,
 )
 
@@ -25,7 +23,7 @@ class FileResponse(
     val sha1: String?,
     val uploadedAt: Instant,
     val isPinned: Boolean,
-) : DocumentResponse("file")
+) : MaterialResponse("file")
 
 fun FileDAO.toResponse() =
     FileResponse(
@@ -50,7 +48,7 @@ class NoteResponse(
     val body: String,
     val updatedAt: Instant,
     val isPinned: Boolean,
-) : DocumentResponse("note")
+) : MaterialResponse("note")
 
 fun NoteDAO.toResponse() =
     let { dao ->

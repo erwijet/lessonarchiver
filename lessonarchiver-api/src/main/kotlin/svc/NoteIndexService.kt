@@ -3,6 +3,7 @@ package com.lessonarchiver.svc
 import co.elastic.clients.elasticsearch.ElasticsearchClient
 import co.elastic.clients.elasticsearch._types.analysis.Analyzer
 import co.elastic.clients.elasticsearch.core.IndexRequest
+import com.lessonarchiver.db.FileGrantTable.userId
 import com.lessonarchiver.db.NoteDAO
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
@@ -24,8 +25,8 @@ fun NoteDAO.toIndexed() = let { dao -> transaction { IndexedNoteDoc(dao.id.value
 class NoteIndexService(
     private val es: ElasticsearchClient,
     override val index: String = "notes",
-) : IndexService {
-    fun upsert(doc: IndexedNoteDoc) {
+) : IndexService<IndexedNoteDoc> {
+    override fun upsert(doc: IndexedNoteDoc) {
         es.index(
             IndexRequest
                 .Builder<IndexedNoteDoc>()
@@ -37,38 +38,22 @@ class NoteIndexService(
         )
     }
 
-    override fun createIndex() {
-        es.indices().create {
-            it.index(index).settings { s ->
-                s.analysis { a ->
-                    a.analyzer(
-                        "${index}_analyzer",
-                        Analyzer.of { az ->
-                            az.custom { c -> c.tokenizer("standard").filter("lowercase") }
-                        },
-                    )
-                }
-                s.numberOfShards("1").numberOfReplicas("0")
-            }
-        }
-    }
-
-    fun delete(
+    override fun delete(
         id: UUID,
         ownerId: UUID,
     ) {
         es.delete { it.index(index).id(id.toString()).routing(rk(ownerId)) }
     }
 
-    fun search(
-        userId: UUID,
+    override fun search(
         q: String,
+        ownerId: UUID,
     ): List<Scored<IndexedNoteDoc>> =
         es
             .search<IndexedNoteDoc> { request ->
                 request
                     .index(index)
-                    .routing(rk(userId))
+                    .routing(rk(ownerId))
                     .query { qb -> qb.multiMatch { mm -> mm.query(q).fields("title^3", "body") } }
             }.toScored()
 }

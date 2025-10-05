@@ -1,7 +1,6 @@
 package com.lessonarchiver.svc
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient
-import co.elastic.clients.elasticsearch._types.analysis.Analyzer
 import co.elastic.clients.elasticsearch.core.IndexRequest
 import com.lessonarchiver.db.FileDAO
 import kotlinx.serialization.Contextual
@@ -22,24 +21,8 @@ fun FileDAO.toIndexed() = IndexedFileDoc(id.value, owner.id.value, fileName)
 class FileIndexService(
     private val es: ElasticsearchClient,
     override val index: String = "files",
-) : IndexService {
-    override fun createIndex() {
-        es.indices().create {
-            it.index(index).settings { s ->
-                s.analysis { a ->
-                    a.analyzer(
-                        "${index}_analyzer",
-                        Analyzer.of { az ->
-                            az.custom { c -> c.tokenizer("standard").filter("lowercase") }
-                        },
-                    )
-                }
-                s.numberOfShards("1").numberOfReplicas("0")
-            }
-        }
-    }
-
-    fun upsert(doc: IndexedFileDoc) {
+) : IndexService<IndexedFileDoc> {
+    override fun upsert(doc: IndexedFileDoc) {
         es.index(
             IndexRequest
                 .Builder<IndexedFileDoc>()
@@ -51,16 +34,16 @@ class FileIndexService(
         )
     }
 
-    fun delete(
+    override fun delete(
         id: UUID,
         ownerId: UUID,
     ) {
         es.delete { it.index(index).id(id.toString()).routing(rk(ownerId)) }
     }
 
-    fun search(
-        ownerId: UUID,
+    override fun search(
         q: String,
+        ownerId: UUID,
     ): List<Scored<IndexedFileDoc>> =
         es
             .search<IndexedFileDoc> { request ->

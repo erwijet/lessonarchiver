@@ -27,4 +27,7 @@ class FileGrantDAO(
 
     val createdAt by FileGrantTable.createdAt
     val expiresAt by FileGrantTable.expiresAt
+
+    val isExpired: Boolean
+        get() = Clock.System.now() < expiresAt
 }
