@@ -1,14 +1,28 @@
 package com.lessonarchiver.db
 
+import io.github.classgraph.ClassGraph
 import org.jetbrains.exposed.dao.UUIDEntity
 import org.jetbrains.exposed.dao.UUIDEntityClass
+import org.jetbrains.exposed.sql.Table
 import java.util.UUID
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 import kotlin.uuid.toJavaUuid
 
-object Registrar {
-    val tables = listOf(UserTable, FileTable, NoteTable, TagTable, TagToFileTable, TagToNoteTable, NotePinTable, FilePinTable)
+annotation class ManagedTable {
+    companion object {
+        fun getAll() =
+            ClassGraph()
+                .enableClassInfo()
+                .enableAnnotationInfo()
+                .scan()
+                .getClassesWithAnnotation(
+                    ManagedTable::class.qualifiedName,
+                ).filter {
+                    it.isStandardClass || it.isAnnotation
+                }.loadClasses()
+                .mapNotNull { runCatching { it.kotlin.objectInstance as? Table }.getOrNull() }
+    }
 }
 
 fun <T, R> Iterable<T>.mapOrNull(f: (T) -> R?): List<R>? {

@@ -22,8 +22,9 @@ b2:
   bucketId: $B2_BUCKET_ID:c1e49a04379946be9f99021f
 
 es:
-  host: $ELASTIC_HOST:es.lessonarchiver.com
-  port: 443
+  scheme: $ELASTIC_SCHEME:https
+  host: $ELASTIC_HOST:localhost
+  port: $ELASTIC_PORT:443
   username: $ELASTIC_USERNAME:elastic
   password: $ELASTIC_PASSWORD
 

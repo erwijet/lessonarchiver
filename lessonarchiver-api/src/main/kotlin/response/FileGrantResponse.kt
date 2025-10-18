@@ -10,9 +10,8 @@ class FileGrantResponse(
     val expiresAt: Instant,
 )
 
-fun FileGrantDAO.toResponse() {
+fun FileGrantDAO.toResponse() =
     FileGrantResponse(
         token = this.id.value.toString(),
         expiresAt = this.expiresAt,
     )
-}

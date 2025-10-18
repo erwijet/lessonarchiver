@@ -3,7 +3,6 @@ package com.lessonarchiver.svc
 import co.elastic.clients.elasticsearch.ElasticsearchClient
 import co.elastic.clients.elasticsearch._types.analysis.Analyzer
 import co.elastic.clients.elasticsearch.core.IndexRequest
-import com.lessonarchiver.db.FileGrantTable.userId
 import com.lessonarchiver.db.NoteDAO
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
@@ -32,7 +31,7 @@ class NoteIndexService(
                 .Builder<IndexedNoteDoc>()
                 .index(index)
                 .id(doc.id.toString())
-                .routing(rk(doc.ownerId))
+                .routing(rk(doc.ownerId.toString()))
                 .document(doc)
                 .build(),
         )
@@ -42,7 +41,7 @@ class NoteIndexService(
         id: UUID,
         ownerId: UUID,
     ) {
-        es.delete { it.index(index).id(id.toString()).routing(rk(ownerId)) }
+        es.delete { it.index(index).id(id.toString()).routing(rk(ownerId.toString())) }
     }
 
     override fun search(
@@ -53,7 +52,7 @@ class NoteIndexService(
             .search<IndexedNoteDoc> { request ->
                 request
                     .index(index)
-                    .routing(rk(ownerId))
+                    .routing(rk(ownerId.toString()))
                     .query { qb -> qb.multiMatch { mm -> mm.query(q).fields("title^3", "body") } }
             }.toScored()
 }

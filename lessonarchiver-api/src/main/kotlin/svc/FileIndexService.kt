@@ -3,19 +3,16 @@ package com.lessonarchiver.svc
 import co.elastic.clients.elasticsearch.ElasticsearchClient
 import co.elastic.clients.elasticsearch.core.IndexRequest
 import com.lessonarchiver.db.FileDAO
-import kotlinx.serialization.Contextual
-import kotlinx.serialization.Serializable
 import org.koin.core.annotation.Single
 import java.util.UUID
 
-@Serializable
 data class IndexedFileDoc(
-    @Contextual val id: UUID,
-    @Contextual val ownerId: UUID,
+    val id: String,
+    val ownerId: String,
     val fileName: String,
 )
 
-fun FileDAO.toIndexed() = IndexedFileDoc(id.value, owner.id.value, fileName)
+fun FileDAO.toIndexed() = IndexedFileDoc(id.value.toString(), owner.id.value.toString(), fileName)
 
 @Single
 class FileIndexService(
@@ -38,7 +35,7 @@ class FileIndexService(
         id: UUID,
         ownerId: UUID,
     ) {
-        es.delete { it.index(index).id(id.toString()).routing(rk(ownerId)) }
+        es.delete { it.index(index).id(id.toString()).routing(rk(ownerId.toString())) }
     }
 
     override fun search(
@@ -49,7 +46,7 @@ class FileIndexService(
             .search<IndexedFileDoc> { request ->
                 request
                     .index(index)
-                    .routing(rk(ownerId))
+                    .routing(rk(ownerId.toString()))
                     .query { qb -> qb.multiMatch { mm -> mm.query(q).fields("fileName^3") } }
-            }.toScored()
+            }.toScored() as List<Scored<IndexedFileDoc>>
 }

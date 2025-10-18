@@ -6,6 +6,8 @@ import co.elastic.clients.transport.ElasticsearchTransport
 import co.elastic.clients.transport.rest_client.RestClientTransport
 import com.backblaze.b2.client.B2StorageClient
 import com.backblaze.b2.client.B2StorageClientFactory
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.ktor.http.auth.AuthScheme
@@ -14,6 +16,7 @@ import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.impl.client.BasicCredentialsProvider
+import org.apache.http.nio.conn.SchemeIOSessionStrategy
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 import org.jetbrains.exposed.sql.Database
@@ -47,6 +50,7 @@ fun Application.configureKoin() {
                         .getString()
                         .toInt()
                 }
+                single<String>(named("es.scheme")) { environment.config.property("es.scheme").getString() }
                 single<String>(named("es.username")) { environment.config.property("es.username").getString() }
                 single<String>(named("es.password")) { environment.config.property("es.password").getString() }
 
@@ -102,14 +106,21 @@ fun Application.configureKoin() {
                 single<RestClient> {
                     RestClient
                         .builder(
-                            HttpHost(get<String>(named("es.host")), get<Int>(named("es.port")), "https"),
+                            HttpHost(get<String>(named("es.host")), get<Int>(named("es.port")), get<String>(named("es.scheme"))),
                         ).setHttpClientConfigCallback {
                             it.setDefaultCredentialsProvider(get<BasicCredentialsProvider>())
                         }.build()
                 }
 
+                single<ObjectMapper> {
+                    ObjectMapper().findAndRegisterModules().configure(
+                        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                        false,
+                    )
+                }
+
                 single<ElasticsearchTransport> {
-                    RestClientTransport(get<RestClient>(), JacksonJsonpMapper())
+                    RestClientTransport(get<RestClient>(), JacksonJsonpMapper(get()))
                 }
 
                 single<ElasticsearchClient> {

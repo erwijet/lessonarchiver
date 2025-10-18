@@ -15,7 +15,12 @@ data class Scored<T>(
 
 fun <T : Any> Hit<T>.toScored() = this.source()?.let { Scored(it, this.score() ?: 0.0) }
 
-fun <T : Any> SearchResponse<T>.toScored() = this.hits().hits().mapNotNull { it.toScored() }.sortedBy { it.score }
+fun <T : Any> SearchResponse<T>.toScored() =
+    this
+        .hits()
+        .hits()
+        .mapNotNull { it.toScored() }
+        .sortedBy { it.score }
 
 inline fun <reified T : Any> ElasticsearchClient.search(block: (SearchRequest.Builder) -> SearchRequest.Builder): SearchResponse<T> =
     this.search(block(SearchRequest.Builder()).build(), T::class.java)
@@ -24,7 +29,7 @@ interface IndexService<TDoc> {
     val index: String
 
     fun createIndex() {
-        val es: ElasticsearchClient by inject(ElasticsearchClient::class.java);
+        val es: ElasticsearchClient by inject(ElasticsearchClient::class.java)
 
         es.indices().create {
             it.index(index).settings { s ->
@@ -41,9 +46,17 @@ interface IndexService<TDoc> {
         }
     }
 
-    fun rk(ownerId: UUID) = ownerId.toString()
+    fun rk(ownerId: String) = ownerId.toString()
 
     fun upsert(doc: TDoc)
-    fun delete(id: UUID, ownerId: UUID)
-    fun search(q: String, ownerId: UUID): List<Scored<TDoc>>
+
+    fun delete(
+        id: UUID,
+        ownerId: UUID,
+    )
+
+    fun search(
+        q: String,
+        ownerId: UUID,
+    ): List<Scored<TDoc>>
 }

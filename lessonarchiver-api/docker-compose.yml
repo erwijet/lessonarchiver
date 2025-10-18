@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: pg-lessonarchiver-local
+    environment:
+      POSTGRES_DB: lessonarchiver
+      POSTGRES_USER: dbo-lessonarchiver-local
+      POSTGRES_PASSWORD: password 
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg:/var/lib/postgresql/data:Z
+  elastic:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.10
+    container_name: es-lessonarchiver-local
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - es:/usr/share/elasticsearch/data
+    environment:
+      ELASTIC_PASSWORD: hunter2
+      "xpack.security.http.ssl.enabled": false
+      "discovery.type": single-node
+
+
+volumes:
+  pg:
+  es:

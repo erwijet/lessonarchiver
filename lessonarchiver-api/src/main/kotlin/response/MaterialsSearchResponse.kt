@@ -8,5 +8,3 @@ data class MaterialsSearchResponse(
     val notes: List<NoteResponse>,
     val files: List<FileResponse>,
 )
-
-

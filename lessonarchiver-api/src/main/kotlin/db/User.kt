@@ -7,6 +7,7 @@ import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
 
+@ManagedTable
 object UserTable : UUIDTable("lessonarchiver.users") {
     val notaryId = varchar("notary_id", 50)
 }

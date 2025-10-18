@@ -1,12 +1,11 @@
 package com.lessonarchiver
 
-import com.lessonarchiver.db.Registrar
+import com.lessonarchiver.db.ManagedTable
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import org.flywaydb.core.Flyway
 import org.flywaydb.database.postgresql.PostgreSQLConfigurationExtension
 import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.koin.core.qualifier.named
 import org.koin.ktor.ext.getKoin
@@ -38,7 +37,11 @@ fun Application.configureMigrations() {
 
     val migrationStmts =
         transaction {
-            MigrationUtils.statementsRequiredForDatabaseMigration(*Registrar.tables.toTypedArray())
+            MigrationUtils.statementsRequiredForDatabaseMigration(
+                *ManagedTable.getAll().toTypedArray().also {
+                    log.info("Found ${it.size} managed tables.")
+                },
+            )
         }
 
     if (migrationStmts.isNotEmpty()) {
